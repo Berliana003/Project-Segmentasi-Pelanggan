@@ -107,6 +107,9 @@ def clean_data(df):
         q99 = df[price_col].quantile(0.99)
         df[price_col] = np.where(df[price_col] > q99, q99, df[price_col])
 
+    # Cap/imputation can create new duplicates, so enforce one more drop
+    df = df.drop_duplicates()
+
     # Final stats
     final_shape = df.shape
     final_missing = df.isnull().sum().sum()
