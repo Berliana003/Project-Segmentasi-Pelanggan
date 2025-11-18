@@ -166,7 +166,7 @@ def plot_missing_bar(df, title='Missing Values by Column'):
         plt.ylabel('Count')
         plt.xticks(rotation=45)
         plt.tight_layout()
-        plt.show()
+        plt.show()      
     else:
         print("No missing values found.")
 
