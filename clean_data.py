@@ -1,69 +1,94 @@
 ﻿from pathlib import Path
 import pandas as pd
-
+import numpy as np
 
 def clean_data(input_path: str = "dataset.csv", output_path: str = "cleaned_dataset.csv") -> Path:
-    """Load dataset, apply simple cleaning rules, and write a new CSV.
-
-    Rules:
-    - Strip/normalize column names (spaces->underscores).
-    - Drop exact duplicate rows.
-    - Coerce numeric fields and remove non-positive quantities/prices.
-    - Parse dates and drop rows with missing critical fields.
+    """
+    Load dataset, apply cleaning rules, and perform EDA checks:
+    - Missing value analysis (per kolom & total)
+    - Duplicate check
+    - Negative quantity (returns)
+    - Price & Quantity outliers (IQR method)
+    - Abnormal invoice date detection
     """
     input_path = Path(input_path)
     output_path = Path(output_path)
 
     df = pd.read_csv(
         input_path,
-        dtype={"Invoice": str, "StockCode": str},  # keep IDs as strings to avoid mixed-type warnings
+        dtype={"Invoice": str, "StockCode": str},
         low_memory=False,
     )
 
-    # Normalize column names to make downstream processing easier.
+    # ========== EDA BEFORE CLEANING ==========
+    print("===== EDA AWAL (SEBELUM CLEANING) =====")
+
+    # 1. Missing value
+    print("\n▶ Missing Value per Kolom:")
+    print(df.isnull().sum())
+    print(f"\n▶ TOTAL Missing Value: {df.isnull().sum().sum()}")
+
+    # 2. Duplikasi
+    print(f"\n▶ Jumlah Duplikasi Baris: {df.duplicated().sum()}")
+
+    # 3. Transaksi dengan Quantity negatif
+    if "Quantity" in df.columns:
+        print(f"\n▶ Jumlah Quantity Negatif (return): {(df['Quantity'] < 0).sum()}")
+
+    # 4. Outlier Harga (IQR)
+    if "Price" in df.columns:
+        Q1_p = df["Price"].quantile(0.25)
+        Q3_p = df["Price"].quantile(0.75)
+        IQR_p = Q3_p - Q1_p
+        outliers_price = ((df["Price"] < (Q1_p - 1.5 * IQR_p)) | (df["Price"] > (Q3_p + 1.5 * IQR_p))).sum()
+        print(f"\n▶ Jumlah Outlier Harga: {outliers_price}")
+
+    # 5. Outlier Quantity (IQR)
+    if "Quantity" in df.columns:
+        Q1_q = df["Quantity"].quantile(0.25)
+        Q3_q = df["Quantity"].quantile(0.75)
+        IQR_q = Q3_q - Q1_q
+        outliers_qty = ((df["Quantity"] < (Q1_q - 1.5 * IQR_q)) | (df["Quantity"] > (Q3_q + 1.5 * IQR_q))).sum()
+        print(f"\n▶ Jumlah Outlier Quantity (IQR): {outliers_qty}")
+
+    # 6. Invoice Date aneh
+    if "InvoiceDate" in df.columns:
+        df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors="coerce")
+        abnormal_date_count = ((df["InvoiceDate"] < "1900-01-01") | (df["InvoiceDate"] > pd.Timestamp.now())).sum()
+        print(f"\n▶ Jumlah Invoice dengan Tanggal Aneh: {abnormal_date_count}")
+
+    # ========== DATA CLEANING ==========
     df.columns = [c.strip().replace(" ", "_") for c in df.columns]
-
-    # Remove rows missing critical identifiers or amounts.
     df = df.dropna(subset=["Invoice", "StockCode", "Quantity", "Price"])
-
-    # Keep identifiers as trimmed strings for consistency.
     df["Invoice"] = df["Invoice"].astype(str).str.strip()
     df["StockCode"] = df["StockCode"].astype(str).str.strip()
-
-    # Drop obvious cancellations where invoice starts with "C".
     df = df[~df["Invoice"].str.startswith("C")]
 
-    # Coerce numeric columns; invalid parsing becomes NaN and is removed.
     df["Quantity"] = pd.to_numeric(df["Quantity"], errors="coerce")
     df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
     df = df.dropna(subset=["Quantity", "Price"])
-
-    # Remove rows with non-positive quantity or price (likely cancellations/bad entries).
     df = df[(df["Quantity"] > 0) & (df["Price"] > 0)]
 
-    # Parse invoice date and drop rows where parsing fails.
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors="coerce")
     df = df.dropna(subset=["InvoiceDate"])
 
-    # Trim description whitespace and drop empty descriptions.
     if "Description" in df.columns:
         df["Description"] = df["Description"].astype(str).str.strip()
         df = df[df["Description"] != ""]
 
-    # Drop rows without a customer id if present.
     if "Customer_ID" in df.columns:
         df = df.dropna(subset=["Customer_ID"])
 
-    # Drop duplicate rows based on key fields.
     dedup_keys = ["Invoice", "StockCode", "InvoiceDate", "Quantity", "Price"]
     existing_keys = [k for k in dedup_keys if k in df.columns]
     df = df.drop_duplicates(subset=existing_keys)
 
-    # Sort for reproducibility.
     df = df.sort_values(by=["Invoice", "StockCode", "InvoiceDate"]).reset_index(drop=True)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
+
+    print("\n✔ Cleaning selesai. Data disimpan ke:", output_path)
     return output_path
 
 
