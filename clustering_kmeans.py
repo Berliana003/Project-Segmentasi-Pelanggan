@@ -28,7 +28,7 @@ def final_kmeans_clustering(fitur_normalized, optimal_k, fitur_customer, df_clea
     fitur_customer["Cluster"] = cluster_labels
     df_clean["Cluster"] = df_clean["Customer_ID"].map(fitur_customer["Cluster"])
 
-    print("\n📌 Contoh hasil clustering:")
+    print("\n📌 hasil clustering:")
     print(fitur_customer.head())
 
     # 3. Analisis per cluster
