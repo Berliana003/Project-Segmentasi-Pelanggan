@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from sklearn.cluster import KMeans
-from scipy.spatial.distance import cdist  # untuk hitung jarak centroid
+from scipy.spatial.distance import cdist
+from sklearn.decomposition import PCA  # 🔥 Tambahan untuk PCA
 
 # IMPORT dari file sebelumnya
 from clean_data import clean_data
@@ -35,7 +36,7 @@ def final_kmeans_clustering(fitur_normalized, optimal_k, fitur_customer, df_clea
     print("\n📊 Ringkasan rata-rata per cluster:")
     print(cluster_summary)
 
-    # 4. Cari negara dominan tiap cluster
+    # 4. Negara dominan tiap cluster
     country_cluster = df_clean.groupby("Cluster")["Country"].agg(lambda x: x.mode()[0])
     print("\n🌍 Negara dominan per cluster:")
     print(country_cluster)
@@ -67,44 +68,51 @@ def final_kmeans_clustering(fitur_normalized, optimal_k, fitur_customer, df_clea
         print(f"🌍 Negara dominan: {country}")
 
     # =====================================================
-    # Tambahan: Hitung jarak antar centroid
+    # PCA untuk visualisasi
     # =====================================================
+    print("\n🎯 Menggunakan PCA untuk visualisasi clustering dalam 2 dimensi")
+    pca = PCA(n_components=2)
+    fitur_pca = pca.fit_transform(fitur_normalized)
+
+    # Proyeksikan centroid ke PCA space
     centroids = kmeans.cluster_centers_
-    centroid_distances = cdist(centroids, centroids)
+    centroid_pca = pca.transform(centroids)
 
-    print("\n📏 MATRIX JARAK ANTAR CENTROID (semakin besar → cluster makin terpisah):")
-    print(pd.DataFrame(centroid_distances, 
-                       index=[f"Cluster {i}" for i in range(optimal_k)],
-                       columns=[f"Cluster {i}" for i in range(optimal_k)]))
-
-    print("\n📎 Koordinat centroid (dalam fitur yang sudah dinormalisasi):")
-    for idx, center in enumerate(centroids):
-        print(f"Cluster {idx} → {center}")
+    print("\n📌 Variance explained oleh PCA:")
+    print(pca.explained_variance_ratio_)
 
     # =====================================================
-    # Visualisasi Clustering + Centroid
+    # Visualisasi Clustering + Centroid (PCA 2D)
     # =====================================================
     plt.figure(figsize=(7, 5))
-    scatter = sns.scatterplot(
-        x=fitur_normalized["Recency_Days"],
-        y=fitur_normalized["Total_Spending"],
+    sns.scatterplot(
+        x=fitur_pca[:, 0],
+        y=fitur_pca[:, 1],
         hue=cluster_labels,
         palette="viridis",
         style=cluster_labels
     )
 
-    # Tambahkan titik pusat centroid
     plt.scatter(
-        centroids[:, fitur_normalized.columns.get_loc("Recency_Days")],
-        centroids[:, fitur_normalized.columns.get_loc("Total_Spending")],
-        s=200, c='red', marker='X', label='Centroid'
+        centroid_pca[:, 0],
+        centroid_pca[:, 1],
+        s=250, marker='X', c='red', label='Centroid'
     )
 
-    plt.title("Visualisasi Clustering (Recency vs Monetary) + Centroid")
-    plt.xlabel("Recency (Normalized)")
-    plt.ylabel("Monetary (Normalized)")
+    plt.title("Cluster Visualization (PCA - 2D Projection)")
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
     plt.legend()
     plt.show()
+
+    # Matrix jarak centroid
+    centroid_distances = cdist(centroids, centroids)
+    print("\n📏 MATRIX JARAK ANTAR CENTROID:")
+    print(pd.DataFrame(
+        centroid_distances,
+        index=[f"Cluster {i}" for i in range(optimal_k)],
+        columns=[f"Cluster {i}" for i in range(optimal_k)]
+    ))
 
     return fitur_customer, kmeans
 
